@@ -7,6 +7,13 @@ function onMouseMove(e) {
     gameState.pointer.y = e.pageY
 }
 
+function onClick(e) {
+    if (gameState.isFail) {
+        setup()
+        run()
+    }
+}
+
 function queueUpdates(numTicks) {
     for (let i = 0; i < numTicks; i++) {
         gameState.lastTick = gameState.lastTick + gameState.tickLength;
@@ -22,16 +29,108 @@ function draw(tFrame) {
 
     drawPlatform(context)
     drawBall(context)
+    drawBunus(context)
+    drawScores(context)
+    drawFailScreen(context)
 }
 
 function update(tick) {
-
+    if (gameState.isFail) 
+        stopGame(gameState.stopCycle)
+    
     const vx = (gameState.pointer.x - gameState.player.x) / 10
     gameState.player.x += vx
 
     const ball = gameState.ball
     ball.y += ball.vy
-    ball.y += ball.vx
+    ball.x += ball.vx
+
+    const bonus = gameState.bonus;
+    if (bonus.isVisible) {
+       bonus.vy += 0.1
+       bonus.y += bonus.vy
+       bonus.x += bonus.vx
+
+       // collision for bonus
+        if (checkWallCollision(bonus)) bonus.vx = -bonus.vx 
+     //   if (checkRoofCollision(bonus)) bonus.vy = -bonus.vy 
+        if (checkBottomCollision(bonus)) bonus.isVisible = false
+        if (checkPlayerCollision(bonus) && ball.vy > 0) {
+            bonus.isVisible = false
+            gameState.scores += 15
+        }
+    }
+
+    // collision for ball
+    if (checkWallCollision(ball)) ball.vx = -ball.vx 
+    if (checkRoofCollision(ball)) ball.vy = -ball.vy 
+    if (checkBottomCollision(ball)) gameState.isFail = true 
+    if (checkPlayerCollision(ball) && ball.vy > 0) {
+        ball.vy = - ball.vy
+        ball.vx += getBounceSpeed(ball) 
+    }
+
+    // score increment
+    if (gameState.lastTick - gameState.lastScoreInc >= 1000) {
+        const ticks = Math.round((gameState.lastTick - gameState.lastScoreInc) / 1000);
+        for (let i = 0; i < ticks; i++){
+            gameState.scores++  
+        } 
+        gameState.lastScoreInc = gameState.lastTick;
+    }
+
+    // speedup
+    if (gameState.lastTick - gameState.lastSpeedUp >= 30000) {
+        ball.vx *= 1.1
+        ball.vy *= 1.1
+        gameState.lastSpeedUp = gameState.lastTick;
+    }
+
+    // bonus
+    if (!gameState.bonus.isVisible 
+        && gameState.lastTick - gameState.lastBonusSpawn >= 15000) {
+        gameState.lastBonusSpawn = gameState.lastTick
+        spawnBonus()
+    }
+}
+
+
+// return true/false for collision with player platform
+function checkPlayerCollision(obj) {
+    const player = gameState.player
+    return obj.x > player.x - player.width / 2
+        && obj.x < player.x + player.width / 2
+        && obj.y + obj.radius >= canvas.height - player.height;
+}
+
+// return true/false for collision with left or right wall (x) 
+function checkWallCollision(obj) {
+    return obj.x <= 0 + obj.radius || obj.x >= canvas.width - obj.radius
+}
+
+// return true/false for collision with roof (y)
+function checkRoofCollision(obj) {
+    return obj.y <= 0 + obj.radius;
+}
+
+// return true/false for collison with bottom (fail)
+function checkBottomCollision(obj) {
+    return obj.y + obj.radius >= canvas.height
+}
+
+// return ball (x) acceleration after bounce
+function getBounceSpeed(ball) {
+    return (ball.x - gameState.player.x) / 10;
+}
+
+function spawnBonus() {
+    const bonus = gameState.bonus
+
+    bonus.isVisible = true
+    bonus.vy = 0
+    bonus.vx = 4 - Math.random() * 8
+    bonus.x = canvas.width / 5 + Math.random() * (canvas.width * 3/5)
+    bonus.y = canvas.height / 5
 }
 
 function run(tFrame) {
@@ -54,21 +153,78 @@ function stopGame(handle) {
 }
 
 function drawPlatform(context) {
-    const {x, y, width, height} = gameState.player;
+    const {x, y, width, height, color} = gameState.player;
     context.beginPath();
     context.rect(x - width / 2, y - height / 2, width, height);
-    context.fillStyle = "#FF0000";
+    context.fillStyle = color;
     context.fill();
     context.closePath();
 }
 
 function drawBall(context) {
-    const {x, y, radius} = gameState.ball;
+    const {x, y, radius, vx, vy, color} = gameState.ball;
     context.beginPath();
     context.arc(x, y, radius, 0, 2 * Math.PI);
-    context.fillStyle = "#0000FF";
+    context.fillStyle = color;
     context.fill();
     context.closePath();
+
+    //draw vector
+    // if (true) {
+    //     context.beginPath();
+    //     context.strokeStyle = "#FF0000";
+    //     context.moveTo(x, y);
+    //     context.lineTo(x + vx * 5, y + vy * 5)
+    //     context.stroke();
+    //     context.closePath();
+    // }
+}
+
+function drawBunus(context) {
+    if (!gameState.bonus.isVisible) return
+
+    const {x, y, vx, vy, color} = gameState.bonus;
+
+    context.fillStyle = color;
+    context.font = "96px Calibri";
+    context.textAlign = "center";
+    context.fillText("+", x, y + 28)
+
+    //draw vector
+    // if (true) {
+    //     context.beginPath();
+    //     context.strokeStyle = "#FF0000";
+    //     context.moveTo(x, y);
+    //     context.lineTo(x + vx * 5, y + vy * 5)
+    //     context.stroke();
+    //     context.closePath();
+    // }
+}
+
+function drawFailScreen(context) {
+    if (gameState.isFail) {
+        context.fillStyle = "#c30000";
+        context.font = "48px Calibri";
+        context.textAlign = "center";
+        context.fillText("GAME OVER!", canvas.width / 2, canvas.height / 2)
+       
+        context.fillStyle = "#000000";
+        context.font = "40px Calibri";        
+        context.fillText("You scores: " + gameState.scores, canvas.width / 2, canvas.height / 2 + 56)
+   
+        context.fillStyle = "#999999";
+        context.font = "24px Calibri";        
+        context.fillText("Click to restart", canvas.width / 2, canvas.height / 2 + 56 + 44)        
+    }
+}
+
+function drawScores(context) {
+    if (!gameState.isFail) {
+        context.fillStyle = "#000000";
+        context.font = "28px Calibri";
+        context.textAlign = "left";
+        context.fillText("Scores: " + gameState.scores, 32, 32)
+    }
 }
 
 function setup() {
@@ -76,33 +232,52 @@ function setup() {
     canvas.height = window.innerHeight;
 
     canvas.addEventListener('mousemove', onMouseMove, false);
+    canvas.addEventListener('click', onClick, false)
 
     gameState.lastTick = performance.now();
     gameState.lastRender = gameState.lastTick;
+    gameState.lastScoreInc = gameState.lastTick;
+    gameState.lastSpeedUp = gameState.lastTick;
+    gameState.lastBonusSpawn = gameState.lastTick;
     gameState.tickLength = 15; //ms
+    gameState.isFail = false;
+    gameState.scores = 0;
 
     const platform = {
         width: 400,
-        height: 50,
+        height: 20,
     };
 
     gameState.player = {
-        x: 100,
+        color: '#000000',
+        x: canvas.width / 2 - platform.width / 2,
         y: canvas.height - platform.height / 2,
         width: platform.width,
         height: platform.height
     };
     gameState.pointer = {
-        x: 0,
+        x: canvas.width / 2,
         y: 0,
     };
     gameState.ball = {
+        color: '#1de8b5',
         x: canvas.width / 2,
-        y: 0,
+        y: 25,
+        radius: 25,
+        vx: 5 - Math.round(Math.random(1) * 10),
+        vy: 10
+    };
+    gameState.bonus = {
+        color: '#ffd600',
+        isVisible: false,
+        x: canvas.width / 2,
+        y: 25,
         radius: 25,
         vx: 0,
-        vy: 5
-    }
+        vy: 0
+    };
+
+
 }
 
 setup();

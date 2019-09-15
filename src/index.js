@@ -29,7 +29,7 @@ function draw(tFrame) {
 
     drawPlatform(context)
     drawBall(context)
-    drawBunus(context)
+    drawBonus(context)
     drawScores(context)
     drawFailScreen(context)
 }
@@ -53,7 +53,7 @@ function update(tick) {
 
        // collision for bonus
         if (checkWallCollision(bonus)) bonus.vx = -bonus.vx 
-     //   if (checkRoofCollision(bonus)) bonus.vy = -bonus.vy 
+        if (checkRoofCollision(bonus)) bonus.vy = -bonus.vy 
         if (checkBottomCollision(bonus)) bonus.isVisible = false
         if (checkPlayerCollision(bonus) && ball.vy > 0) {
             bonus.isVisible = false
@@ -169,18 +169,10 @@ function drawBall(context) {
     context.fill();
     context.closePath();
 
-    //draw vector
-    // if (true) {
-    //     context.beginPath();
-    //     context.strokeStyle = "#FF0000";
-    //     context.moveTo(x, y);
-    //     context.lineTo(x + vx * 5, y + vy * 5)
-    //     context.stroke();
-    //     context.closePath();
-    // }
+    //drawVector(context, x, x + vx * 5, y, y + vy *5)
 }
 
-function drawBunus(context) {
+function drawBonus(context) {
     if (!gameState.bonus.isVisible) return
 
     const {x, y, vx, vy, color} = gameState.bonus;
@@ -190,15 +182,16 @@ function drawBunus(context) {
     context.textAlign = "center";
     context.fillText("+", x, y + 28)
 
-    //draw vector
-    // if (true) {
-    //     context.beginPath();
-    //     context.strokeStyle = "#FF0000";
-    //     context.moveTo(x, y);
-    //     context.lineTo(x + vx * 5, y + vy * 5)
-    //     context.stroke();
-    //     context.closePath();
-    // }
+    //drawVector(context, x, x + vx * 5, y, y + vy *5)
+}
+
+function drawVector(context, x1, x2, y1, y2) {
+    context.beginPath();
+    context.strokeStyle = "#FF0000";
+    context.moveTo(x1, y1);
+    context.lineTo(x2, y2)
+    context.stroke();
+    context.closePath();
 }
 
 function drawFailScreen(context) {
@@ -245,7 +238,7 @@ function setup() {
 
     const platform = {
         width: 400,
-        height: 20,
+        height: 50,
     };
 
     gameState.player = {

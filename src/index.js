@@ -1,5 +1,12 @@
 const canvas = document.getElementById("cnvs");
 
+const direction = {
+    left : 0,
+    right : 1,
+    up : 2,
+    down : 3,
+    none : -1
+}
 const gameState = {};
 
 function onMouseMove(e) {
@@ -52,23 +59,50 @@ function update(tick) {
        bonus.x += bonus.vx
 
        // collision for bonus
-        if (checkWallCollision(bonus)) bonus.vx = -bonus.vx 
+       const wallDir = checkWallCollision(bonus)
+       if (wallDir === direction.left && bonus.vx > 0) {
+           bonus.vx = -bonus.vx
+       } else if (wallDir === direction.right && bonus.vx < 0) {
+           bonus.vx = -bonus.vx
+       }
+
+       const playerDir = checkPlayerCollision(bonus)
+       if (playerDir === direction.left && bonus.vx > 0) {
+           bonus.vx = -bonus.vx
+       } else if (playerDir === direction.right && bonus.vx < 0) { 
+           bonus.vx = -bonus.vx
+       } else if (playerDir === direction.up && bonus.vy > 0) {
+           bonus.isVisible = false
+           gameState.scores += 15
+       }
+
         if (checkRoofCollision(bonus)) bonus.vy = -bonus.vy 
         if (checkBottomCollision(bonus)) bonus.isVisible = false
-        if (checkPlayerCollision(bonus) && ball.vy > 0) {
-            bonus.isVisible = false
-            gameState.scores += 15
-        }
+
+
     }
 
     // collision for ball
-    if (checkWallCollision(ball)) ball.vx = -ball.vx 
-    if (checkRoofCollision(ball)) ball.vy = -ball.vy 
-    if (checkBottomCollision(ball)) gameState.isFail = true 
-    if (checkPlayerCollision(ball) && ball.vy > 0) {
+    const wallDir = checkWallCollision(ball)
+    if (wallDir === direction.left && ball.vx > 0) {
+        ball.vx = -ball.vx
+    } else if (wallDir === direction.right && ball.vx < 0) {
+        ball.vx = -ball.vx
+    }
+
+    const playerDir = checkPlayerCollision(ball)
+    if (playerDir === direction.left && ball.vx > 0) {
+        ball.vx = -ball.vx
+    } else if (playerDir === direction.right && ball.vx < 0) {
+        ball.vx = -ball.vx
+    } else if (playerDir === direction.up && ball.vy > 0) {
         ball.vy = - ball.vy
         ball.vx += getBounceSpeed(ball) 
     }
+
+    if (checkRoofCollision(ball)) ball.vy = -ball.vy 
+    if (checkBottomCollision(ball)) gameState.isFail = true    
+    
 
     // score increment
     if (gameState.lastTick - gameState.lastScoreInc >= 1000) {
@@ -95,17 +129,30 @@ function update(tick) {
 }
 
 
-// return true/false for collision with player platform
+// return bounce direction for collision with player platform
 function checkPlayerCollision(obj) {
     const player = gameState.player
-    return obj.x > player.x - player.width / 2
-        && obj.x < player.x + player.width / 2
-        && obj.y + obj.radius >= canvas.height - player.height;
+
+    // действий не требуется
+    if (obj.y + obj.radius < canvas.height - player.height
+         || obj.x + obj.radius < leftSide
+         || obj.x - obj.radius < rightSide)
+         return direction.none         
+    
+    const leftSide = player.x - player.width / 2
+    const rightSide = player.x + player.width / 2
+     
+    if (obj.x + obj.radius >= leftSide && obj.x < leftSide) return direction.left 
+    else if (obj.x - obj.radius <= rightSide && obj.x > rightSide) return direction.right
+    else if (obj.x >= leftSide && obj.x <= rightSide) return direction.up
+    else return direction.none
 }
 
-// return true/false for collision with left or right wall (x) 
+// return bounce direction for collision with left or right wall (x) 
 function checkWallCollision(obj) {
-    return obj.x <= 0 + obj.radius || obj.x >= canvas.width - obj.radius
+    if (obj.x <= 0 + obj.radius) return direction.right
+    else if (obj.x >= canvas.width - obj.radius) return direction.left
+    else return direction.none
 }
 
 // return true/false for collision with roof (y)
@@ -120,7 +167,7 @@ function checkBottomCollision(obj) {
 
 // return ball (x) acceleration after bounce
 function getBounceSpeed(ball) {
-    return (ball.x - gameState.player.x) / 10;
+    return (ball.x - gameState.player.x) / 20;
 }
 
 function spawnBonus() {

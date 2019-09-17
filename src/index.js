@@ -78,8 +78,7 @@ function update(tick) {
 
         if (checkRoofCollision(bonus)) bonus.vy = -bonus.vy 
         if (checkBottomCollision(bonus)) bonus.isVisible = false
-
-
+        
     }
 
     // collision for ball
@@ -271,9 +270,6 @@ function setup() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    canvas.addEventListener('mousemove', onMouseMove, false);
-    canvas.addEventListener('click', onClick, false)
-
     gameState.lastTick = performance.now();
     gameState.lastRender = gameState.lastTick;
     gameState.lastScoreInc = gameState.lastTick;
@@ -316,9 +312,10 @@ function setup() {
         vx: 0,
         vy: 0
     };
-
-
 }
+
+canvas.addEventListener('mousemove', onMouseMove, false);
+canvas.addEventListener('click', onClick, false)
 
 setup();
 run();

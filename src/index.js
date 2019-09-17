@@ -133,15 +133,15 @@ function update(tick) {
 function checkPlayerCollision(obj) {
     const player = gameState.player
 
-    // действий не требуется
-    if (obj.y + obj.radius < canvas.height - player.height
-         || obj.x + obj.radius < leftSide
-         || obj.x - obj.radius < rightSide)
-         return direction.none         
-    
     const leftSide = player.x - player.width / 2
     const rightSide = player.x + player.width / 2
-     
+
+    // действий не требуется
+    if (obj.y + obj.radius < canvas.height - player.height
+         || (obj.x + obj.radius < leftSide
+         && obj.x - obj.radius < rightSide))
+         return direction.none         
+
     if (obj.x + obj.radius >= leftSide && obj.x < leftSide) return direction.left 
     else if (obj.x - obj.radius <= rightSide && obj.x > rightSide) return direction.right
     else if (obj.x >= leftSide && obj.x <= rightSide) return direction.up

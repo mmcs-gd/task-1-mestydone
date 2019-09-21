@@ -1,5 +1,24 @@
 const canvas = document.getElementById("cnvs");
 
+const config = {
+    triangels : {
+        count : 50,
+        size : 15
+    }, 
+
+    circles : {
+        count : 200,
+        size : 5
+    }, 
+
+    hexagons : {
+        count : 20,
+        size : 15
+    }, 
+}
+
+const objectColors = ["#666666", "#9c6b43", "#ff7300"]
+
 const direction = {
     left : 0,
     right : 1,
@@ -7,18 +26,11 @@ const direction = {
     down : 3,
     none : -1
 }
-const gameState = {};
 
-function onMouseMove(e) {
-    gameState.pointer.x = e.pageX;
-    gameState.pointer.y = e.pageY
-}
+const gameState = {}
 
 function onClick(e) {
-    if (gameState.isFail) {
-        setup()
-        run()
-    }
+    setup()
 }
 
 function queueUpdates(numTicks) {
@@ -34,150 +46,71 @@ function draw(tFrame) {
     // clear canvas
     context.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawPlatform(context)
-    drawBall(context)
-    drawBonus(context)
-    drawScores(context)
-    drawFailScreen(context)
+    drawObjects(context)
+    drawInfo(context)
+    drawRestartHint(context)
 }
 
 function update(tick) {
-    if (gameState.isFail) 
-        stopGame(gameState.stopCycle)
+   const objects = gameState.objects;
+    objects.forEach(obj => {
+        obj.x += obj.vx
+        obj.y += obj.vy 
+
+        //obj.vy += 0.2 // что-то типа гравитации
+
+        const dir = checkWallCollision(obj)
     
-    const vx = (gameState.pointer.x - gameState.player.x) / 10
-    gameState.player.x += vx
+        switch(dir) {
+            case direction.left: if (obj.vx > 0)   obj.vx *= -1; break
+            case direction.right : if (obj.vx < 0) obj.vx *= -1; break
+            case direction.up : if (obj.vy > 0)    obj.vy *= -1; break
+            case direction.down : if (obj.vy < 0)  obj.vy *= -1; break
+        }
 
-    const ball = gameState.ball
-    ball.y += ball.vy
-    ball.x += ball.vx
+        if (dir !== direction.none) {
+            obj.bounceCount++;
+        } else {
+            objects.forEach(otherObj => {
+                if (otherObj === obj || otherObj.processedOnTick === tick) return
 
-    const bonus = gameState.bonus;
-    if (bonus.isVisible) {
-       bonus.vy += 0.1
-       bonus.y += bonus.vy
-       bonus.x += bonus.vx
+                if (checkObjectCollision(obj, otherObj)) {
+                    const otherObjVx = otherObj.vx
+                    const otherObjVy = otherObj.vy
 
-       // collision for bonus
-       const wallDir = checkWallCollision(bonus)
-       if (wallDir === direction.left && bonus.vx > 0) {
-           bonus.vx = -bonus.vx
-       } else if (wallDir === direction.right && bonus.vx < 0) {
-           bonus.vx = -bonus.vx
-       }
+                    otherObj.vx = obj.vx
+                    otherObj.vy = obj.vy
 
-       const playerDir = checkPlayerCollision(bonus)
-       if (playerDir === direction.left && bonus.vx > 0) {
-           bonus.vx = -bonus.vx
-       } else if (playerDir === direction.right && bonus.vx < 0) { 
-           bonus.vx = -bonus.vx
-       } else if (playerDir === direction.up && bonus.vy > 0) {
-           bonus.isVisible = false
-           gameState.scores += 15
-       }
+                    obj.vx = otherObjVx
+                    obj.vy = otherObjVy
+                   
+                    obj.bounceCount++;
+                    otherObj.bounceCount++;
+                }
+            })
+        }
 
-        if (checkRoofCollision(bonus)) bonus.vy = -bonus.vy 
-        if (checkBottomCollision(bonus)) bonus.isVisible = false
-        
-    }
+        obj.processedOnTick = tick
+    })
 
-    // collision for ball
-    const wallDir = checkWallCollision(ball)
-    if (wallDir === direction.left && ball.vx > 0) {
-        ball.vx = -ball.vx
-    } else if (wallDir === direction.right && ball.vx < 0) {
-        ball.vx = -ball.vx
-    }
-
-    const playerDir = checkPlayerCollision(ball)
-    if (playerDir === direction.left && ball.vx > 0) {
-        ball.vx = -ball.vx
-    } else if (playerDir === direction.right && ball.vx < 0) {
-        ball.vx = -ball.vx
-    } else if (playerDir === direction.up && ball.vy > 0) {
-        ball.vy = - ball.vy
-        ball.vx += getBounceSpeed(ball) 
-    }
-
-    if (checkRoofCollision(ball)) ball.vy = -ball.vy 
-    if (checkBottomCollision(ball)) gameState.isFail = true    
-    
-
-    // score increment
-    if (gameState.lastTick - gameState.lastScoreInc >= 1000) {
-        const ticks = Math.round((gameState.lastTick - gameState.lastScoreInc) / 1000);
-        for (let i = 0; i < ticks; i++){
-            gameState.scores++  
-        } 
-        gameState.lastScoreInc = gameState.lastTick;
-    }
-
-    // speedup
-    if (gameState.lastTick - gameState.lastSpeedUp >= 30000) {
-        ball.vx *= 1.1
-        ball.vy *= 1.1
-        gameState.lastSpeedUp = gameState.lastTick;
-    }
-
-    // bonus
-    if (!gameState.bonus.isVisible 
-        && gameState.lastTick - gameState.lastBonusSpawn >= 15000) {
-        gameState.lastBonusSpawn = gameState.lastTick
-        spawnBonus()
-    }
+    gameState.objects = objects.filter(obj => obj.bounceCount < 3)
 }
 
 
-// return bounce direction for collision with player platform
-function checkPlayerCollision(obj) {
-    const player = gameState.player
-
-    const leftSide = player.x - player.width / 2
-    const rightSide = player.x + player.width / 2
-
-    // действий не требуется
-    if (obj.y + obj.radius < canvas.height - player.height
-         || (obj.x + obj.radius < leftSide
-         && obj.x - obj.radius < rightSide))
-         return direction.none         
-
-    if (obj.x + obj.radius >= leftSide && obj.x < leftSide) return direction.left 
-    else if (obj.x - obj.radius <= rightSide && obj.x > rightSide) return direction.right
-    else if (obj.x >= leftSide && obj.x <= rightSide) return direction.up
-    else return direction.none
-}
-
-// return bounce direction for collision with left or right wall (x) 
+// return bounce direction for collision with wall
 function checkWallCollision(obj) {
     if (obj.x <= 0 + obj.radius) return direction.right
     else if (obj.x >= canvas.width - obj.radius) return direction.left
+    else if (obj.y <= 0 + obj.radius) return direction.down
+    else if (obj.y + obj.radius >= canvas.height) return direction.up
     else return direction.none
 }
 
-// return true/false for collision with roof (y)
-function checkRoofCollision(obj) {
-    return obj.y <= 0 + obj.radius;
+// true if objects collided
+function checkObjectCollision(obj1, obj2) {
+    return Math.sqrt(Math.pow(obj1.x - obj2.x, 2) + Math.pow(obj1.y - obj2.y, 2)) < obj1.radius + obj2.radius
 }
 
-// return true/false for collison with bottom (fail)
-function checkBottomCollision(obj) {
-    return obj.y + obj.radius >= canvas.height
-}
-
-// return ball (x) acceleration after bounce
-function getBounceSpeed(ball) {
-    return (ball.x - gameState.player.x) / 20;
-}
-
-function spawnBonus() {
-    const bonus = gameState.bonus
-
-    bonus.isVisible = true
-    bonus.vy = 0
-    bonus.vx = 4 - Math.random() * 8
-    bonus.x = canvas.width / 5 + Math.random() * (canvas.width * 3/5)
-    bonus.y = canvas.height / 5
-}
 
 function run(tFrame) {
     gameState.stopCycle = window.requestAnimationFrame(run);
@@ -189,132 +122,173 @@ function run(tFrame) {
         const timeSinceTick = tFrame - gameState.lastTick;
         numTicks = Math.floor(timeSinceTick / gameState.tickLength);
     }
+
     queueUpdates(numTicks);
     draw(tFrame);
+
+    // save last 240 frame times
+    gameState.frameTimes.push(tFrame - gameState.lastRender)
     gameState.lastRender = tFrame;
+
+    if (gameState.frameTimes.length > 240) {
+        gameState.frameTimes.splice(0, 1)
+    }
 }
 
 function stopGame(handle) {
     window.cancelAnimationFrame(handle);
 }
 
-function drawPlatform(context) {
-    const {x, y, width, height, color} = gameState.player;
-    context.beginPath();
-    context.rect(x - width / 2, y - height / 2, width, height);
-    context.fillStyle = color;
-    context.fill();
-    context.closePath();
-}
+function drawObjects(context) {
+    gameState.objects.forEach(obj => {
+        context.beginPath();
+        context.fillStyle = objectColors[obj.bounceCount];
+        context.moveTo(obj.x + obj.points[0].x, obj.y + obj.points[0].y);
+    
+        obj.points.forEach(({x, y}) => {
+            context.lineTo(obj.x + x, obj.y + y)
+        })
+        
+        context.fill()
+        context.closePath()
 
-function drawBall(context) {
-    const {x, y, radius, vx, vy, color} = gameState.ball;
-    context.beginPath();
-    context.arc(x, y, radius, 0, 2 * Math.PI);
-    context.fillStyle = color;
-    context.fill();
-    context.closePath();
-
-    //drawVector(context, x, x + vx * 5, y, y + vy *5)
-}
-
-function drawBonus(context) {
-    if (!gameState.bonus.isVisible) return
-
-    const {x, y, vx, vy, color} = gameState.bonus;
-
-    context.fillStyle = color;
-    context.font = "96px Calibri";
-    context.textAlign = "center";
-    context.fillText("+", x, y + 28)
-
-    //drawVector(context, x, x + vx * 5, y, y + vy *5)
+        //drawVector(context, obj.x, obj.x + obj.vx * 10, obj.y,  obj.y + obj.vy * 10)
+    })
 }
 
 function drawVector(context, x1, x2, y1, y2) {
     context.beginPath();
-    context.strokeStyle = "#FF0000";
+    context.strokeStyle = "#000000";
     context.moveTo(x1, y1);
-    context.lineTo(x2, y2)
+    context.lineTo(x2 , y2)
     context.stroke();
     context.closePath();
 }
 
-function drawFailScreen(context) {
-    if (gameState.isFail) {
-        context.fillStyle = "#c30000";
-        context.font = "48px Calibri";
-        context.textAlign = "center";
-        context.fillText("GAME OVER!", canvas.width / 2, canvas.height / 2)
-       
-        context.fillStyle = "#000000";
-        context.font = "40px Calibri";        
-        context.fillText("You scores: " + gameState.scores, canvas.width / 2, canvas.height / 2 + 56)
-   
-        context.fillStyle = "#999999";
-        context.font = "24px Calibri";        
-        context.fillText("Click to restart", canvas.width / 2, canvas.height / 2 + 56 + 44)        
+// draw info about objects count, FPS and frame time statistics
+function drawInfo(context) {
+    context.textAlign = "right";
+    context.fillStyle = "#333333";
+    context.font = "18px Calibri";
+    context.fillText("Objects count: " + gameState.objects.length, canvas.width - 24, 32)
+
+
+    let ftX = canvas.width - 24
+    const ftLen = gameState.frameTimes.length
+    
+    context.beginPath()
+    context.strokeStyle = "#333333";
+    context.moveTo(ftX--, 140 - gameState.frameTimes[ftLen - 1]);
+    for(let i = 2; i < ftLen; i++) {
+        context.lineTo(ftX--, 140 - gameState.frameTimes[ftLen - i])
+    }
+    
+    context.stroke();
+    context.closePath();
+
+    if (ftLen > 0) {
+        const fps = 1000 / gameState.frameTimes[ftLen - 1]
+        context.fillText("Frame time " + gameState.frameTimes[ftLen - 1].toFixed(1) + " ms, " + Math.floor(fps)+ " fps", canvas.width - 24, 60)
     }
 }
 
-function drawScores(context) {
-    if (!gameState.isFail) {
-        context.fillStyle = "#000000";
-        context.font = "28px Calibri";
-        context.textAlign = "left";
-        context.fillText("Scores: " + gameState.scores, 32, 32)
-    }
+// draw "click to restart" hint
+function drawRestartHint(context) {
+    if (gameState.objects.length > 10) return
+    context.textAlign = "center";
+    context.fillStyle = "#00000016";
+    context.font = "48px Calibri";
+    context.fillText("click to restart", canvas.width / 2, canvas.height / 2)
 }
 
 function setup() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
 
-    gameState.lastTick = performance.now();
-    gameState.lastRender = gameState.lastTick;
-    gameState.lastScoreInc = gameState.lastTick;
-    gameState.lastSpeedUp = gameState.lastTick;
-    gameState.lastBonusSpawn = gameState.lastTick;
-    gameState.tickLength = 15; //ms
-    gameState.isFail = false;
-    gameState.scores = 0;
+    gameState.lastTick = performance.now()
+    gameState.lastRender = gameState.lastTick
+    gameState.tickLength = 15
 
-    const platform = {
-        width: 400,
-        height: 50,
-    };
+    gameState.objects = []
 
-    gameState.player = {
-        color: '#000000',
-        x: canvas.width / 2 - platform.width / 2,
-        y: canvas.height - platform.height / 2,
-        width: platform.width,
-        height: platform.height
-    };
-    gameState.pointer = {
-        x: canvas.width / 2,
-        y: 0,
-    };
-    gameState.ball = {
-        color: '#1de8b5',
-        x: canvas.width / 2,
-        y: 25,
-        radius: 25,
-        vx: 5 - Math.round(Math.random(1) * 10),
-        vy: 10
-    };
-    gameState.bonus = {
-        color: '#ffd600',
-        isVisible: false,
-        x: canvas.width / 2,
-        y: 25,
-        radius: 25,
-        vx: 0,
-        vy: 0
-    };
+
+    getSpeed = function() {
+        return (10 - Math.round(Math.random(1) * 20)) / 3
+    }
+
+    getCoordX = function() {
+        return 64 + Math.random() * (canvas.width - 128)
+    }
+
+    getCoordY = function() {
+        return 64 + Math.random() * (canvas.height - 128)
+    }
+
+    // generate triangels
+    for (let i = 0; i < config.triangels.count; i++) {
+        gameState.objects.push({
+            bounceCount : 0,
+            radius: config.triangels.size,
+            processedOnTick : gameState.lastTick,
+            angles : 3,
+            points : createCornerPoints(3, config.triangels.size),
+            x : getCoordX(),
+            y : getCoordY(),
+            vx: getSpeed(),
+            vy: getSpeed()
+        })
+    }
+
+    // generate hexagons
+    for (let i = 0; i < config.hexagons.count; i++) {
+        gameState.objects.push({
+            bounceCount : 0,
+            radius: config.hexagons.size,
+            processedOnTick : gameState.lastTick,
+            angles : 6,
+            points : createCornerPoints(6, config.hexagons.size),
+            x : getCoordX(),
+            y : getCoordY(),
+            vx: getSpeed(),
+            vy: getSpeed()
+        })
+    }
+
+    // generate circles
+    for (let i = 0; i < config.circles.count; i++) {
+        gameState.objects.push({
+            bounceCount : 0,
+            radius: config.circles.size,
+            processedOnTick : gameState.lastTick,
+            angles : 24,
+            points : createCornerPoints(24, config.circles.size),
+            x : getCoordX(),
+            y : getCoordY(),
+            vx: getSpeed(),
+            vy: getSpeed()
+        })
+    }
+
+    gameState.frameTimes = []
 }
 
-canvas.addEventListener('mousemove', onMouseMove, false);
+// сreates a set of corner points for a shape
+function createCornerPoints(anglesCount, radius) {
+    const points = []
+    let angle = 0
+
+    while (angle <= 2 * Math.PI) {
+        const px = Math.sin(angle) * (-radius)
+        const py = Math.cos(angle) * (-radius)
+        
+        points.push({x : px, y : py})
+        
+        angle += (360 / anglesCount) * Math.PI / 180
+    }
+
+    return points
+}
+
 canvas.addEventListener('click', onClick, false)
 
 setup();

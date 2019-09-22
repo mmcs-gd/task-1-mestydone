@@ -2,19 +2,26 @@ const canvas = document.getElementById("cnvs");
 
 const config = {
     triangels : {
-        count : 50,
-        size : 15
+        count : 100,
+        size : 8
     }, 
 
     circles : {
-        count : 200,
-        size : 5
+        count : 100,
+        size : 8
     }, 
 
     hexagons : {
-        count : 20,
-        size : 15
+        count : 100,
+        size : 8
     }, 
+}
+
+// 5x10 500 500 500
+
+const grid = {
+    height : 5,
+    width : 10
 }
 
 const objectColors = ["#666666", "#9c6b43", "#ff7300"]
@@ -47,17 +54,26 @@ function draw(tFrame) {
     context.clearRect(0, 0, canvas.width, canvas.height);
 
     drawObjects(context)
-    drawInfo(context)
     drawRestartHint(context)
+    drawInfo(context)
+    drawGrid(context)
 }
 
 function update(tick) {
-   const objects = gameState.objects;
+    const objects = gameState.objects;
+    
+    objects.forEach(obj => {
+        row = Math.trunc(obj.y / (canvas.height / grid.height))
+        col = Math.trunc(obj.x / (canvas.width / grid.width))
+
+        obj.cell = grid.width * row + col
+    })
+    
     objects.forEach(obj => {
         obj.x += obj.vx
         obj.y += obj.vy 
 
-        //obj.vy += 0.2 // что-то типа гравитации
+        //obj.vy += 0.1 // что-то типа гравитации
 
         const dir = checkWallCollision(obj)
     
@@ -69,10 +85,15 @@ function update(tick) {
         }
 
         if (dir !== direction.none) {
+            // столкновение со стеной
             obj.bounceCount++;
         } else {
-            objects.forEach(otherObj => {
-                if (otherObj === obj || otherObj.processedOnTick === tick) return
+            // столкновение с другим объектом
+            objects
+         //   .filter(otherObj => obj.cell == otherObj.cell)
+            .forEach(otherObj => {
+                if (otherObj === obj 
+                    || otherObj.processedOnTick === tick) return
 
                 if (checkObjectCollision(obj, otherObj)) {
                     const otherObjVx = otherObj.vx
@@ -99,18 +120,83 @@ function update(tick) {
 
 // return bounce direction for collision with wall
 function checkWallCollision(obj) {
-    if (obj.x <= 0 + obj.radius) return direction.right
-    else if (obj.x >= canvas.width - obj.radius) return direction.left
-    else if (obj.y <= 0 + obj.radius) return direction.down
-    else if (obj.y + obj.radius >= canvas.height) return direction.up
-    else return direction.none
+    if (obj.x <= 0 + obj.radius) {
+        if (obj.type === "circle") {
+            return direction.right
+        } else {        
+            for (let i = 0; i < obj.points.length; i++)
+                if(obj.points[i].x + obj.x <= 0) 
+                    return direction.right
+        }
+    } 
+        
+    if (obj.x >= canvas.width - obj.radius) {
+        if (obj.type === "circle") {
+            return direction.left
+        } else {        
+            for (let i = 0; i < obj.points.length; i++)
+                if(obj.points[i].x + obj.x >= canvas.width) 
+                    return direction.left
+        }
+    }
+    
+    if (obj.y <= 0 + obj.radius) {
+        if (obj.type === "circle") {
+            return direction.down
+        } else {        
+            for (let i = 0; i < obj.points.length; i++)
+                if(obj.points[i].y + obj.y <= 0) 
+                    return direction.down
+        }
+    }
+        
+    if (obj.y + obj.radius >= canvas.height) {
+        if (obj.type === "circle") {
+            return direction.up
+        } else {        
+            for (let i = 0; i < obj.points.length; i++)
+                if(obj.points[i].y + obj.y >= canvas.height) 
+                    return direction.up
+        }
+    }
+
+    return direction.none
 }
 
 // true if objects collided
 function checkObjectCollision(obj1, obj2) {
-    return Math.sqrt(Math.pow(obj1.x - obj2.x, 2) + Math.pow(obj1.y - obj2.y, 2)) < obj1.radius + obj2.radius
-}
+    if (obj1.type === "circle" && obj2.type === "circle") {
+        // Евклидово растояние между центрами окружностей < 2R
+        return Math.sqrt(Math.pow(obj1.x - obj2.x, 2) + Math.pow(obj1.y - obj2.y, 2)) < obj1.radius + obj2.radius
+    } else {
+        const distance = Math.sqrt(Math.pow(obj1.x - obj2.x, 2) + Math.pow(obj1.y - obj2.y, 2));
+        if (distance > obj1.radius + obj2.radius) return false;
 
+        // Пересечение отрезков 
+        const points1 = obj1.points
+        const points2 = obj2.points
+    
+        for (let i = 0; i < points1.length - 1; i++) {
+            const ax = points1[i].x + obj1.x
+            const bx = points1[i + 1].x + obj1.x
+            const ay = points1[i].y + obj1.y
+            const by = points1[i + 1].y + obj1.y
+    
+            for (let j = 0; j < points2.length - 1; j++) {
+                const cx = points2[j].x + obj2.x
+                const dx = points2[j + 1].x + obj2.x
+                const cy = points2[j].y + obj2.y
+                const dy = points2[j + 1].y + obj2.y
+        
+                const r = ((ay-cy)*(dx-cx)-(ax-cx)*(dy-cy)) / ((bx-ax)*(dy-cy)-(by-ay)*(dx-cx))
+                const s = ((ay-cy)*(bx-ax)-(ax-cx)*(by-ay)) / ((bx-ax)*(dy-cy)-(by-ay)*(dx-cx))
+    
+                if (r >= 0 && r <= 1 && s >= 0 && s <= 1) return true
+            }
+        }
+        return false
+    }
+}
 
 function run(tFrame) {
     gameState.stopCycle = window.requestAnimationFrame(run);
@@ -141,18 +227,7 @@ function stopGame(handle) {
 
 function drawObjects(context) {
     gameState.objects.forEach(obj => {
-        context.beginPath();
-        context.fillStyle = objectColors[obj.bounceCount];
-        context.moveTo(obj.x + obj.points[0].x, obj.y + obj.points[0].y);
-    
-        obj.points.forEach(({x, y}) => {
-            context.lineTo(obj.x + x, obj.y + y)
-        })
-        
-        context.fill()
-        context.closePath()
-
-        //drawVector(context, obj.x, obj.x + obj.vx * 10, obj.y,  obj.y + obj.vy * 10)
+        obj.draw(context)
     })
 }
 
@@ -164,6 +239,30 @@ function drawVector(context, x1, x2, y1, y2) {
     context.stroke();
     context.closePath();
 }
+
+
+function drawGrid(context) {
+    context.beginPath();
+    context.font = "32px Calibri";
+    context.strokeStyle = "#CCCCCC";
+    for (let i = 1; i < grid.width; i++){
+        const x = canvas.width / grid.width * i
+        context.moveTo(x, 0);
+        context.lineTo(x , canvas.height)
+        context.stroke();
+    }
+
+    // context.strokeStyle = "#00000007";    
+    for (let i = 1; i < grid.height; i++){
+        const y = canvas.height / grid.height * i
+        context.moveTo(0, y);
+        context.lineTo(canvas.width , y)
+        context.stroke();
+    }
+
+    context.closePath();
+}
+
 
 // draw info about objects count, FPS and frame time statistics
 function drawInfo(context) {
@@ -211,82 +310,102 @@ function setup() {
 
     gameState.objects = []
 
+    getSpeed = () => { return (10 - Math.round(Math.random(1) * 20)) / 3 }
 
-    getSpeed = function() {
-        return (10 - Math.round(Math.random(1) * 20)) / 3
+    getCoordX = () => { return 32 + Math.random() * (canvas.width - 64) }
+
+    getCoordY = () => {return 32 + Math.random() * (canvas.height - 64) }
+    
+    // сreates a set of corner points for a shape
+    createCornerPoints = (anglesCount, radius) => {
+        const points = []
+        let angle = 0
+
+        while (angle <= 2 * Math.PI) {
+            const px = Math.sin(angle) * (-radius)
+            const py = Math.cos(angle) * (-radius)
+            
+            points.push({x : px, y : py})
+            
+            angle += (360 / anglesCount) * Math.PI / 180
+        }
+
+        return points
     }
 
-    getCoordX = function() {
-        return 64 + Math.random() * (canvas.width - 128)
-    }
-
-    getCoordY = function() {
-        return 64 + Math.random() * (canvas.height - 128)
-    }
-
-    // generate triangels
-    for (let i = 0; i < config.triangels.count; i++) {
-        gameState.objects.push({
+    createObject = (type, anglesCount, size) => {
+        return {
+            type : type,
             bounceCount : 0,
-            radius: config.triangels.size,
+            cell : 0,
+            radius: size,
             processedOnTick : gameState.lastTick,
-            angles : 3,
-            points : createCornerPoints(3, config.triangels.size),
+            points : createCornerPoints(anglesCount, size),
             x : getCoordX(),
             y : getCoordY(),
             vx: getSpeed(),
             vy: getSpeed()
-        })
+        }
+    }
+
+
+    // generate triangels
+    for (let i = 0; i < config.triangels.count; i++) {
+        obj = createObject("triangle", 3, config.triangels.size)
+        obj.draw = function(context) {
+            context.beginPath();
+            context.fillStyle = objectColors[this.bounceCount];
+            context.moveTo(this.x + this.points[0].x, this.y + this.points[0].y);
+        
+            this.points.forEach(({x, y}) => {
+                context.lineTo(this.x + x, this.y + y)
+            })
+            
+            context.fill()
+            context.closePath()
+        }
+
+        gameState.objects.push(obj)
     }
 
     // generate hexagons
     for (let i = 0; i < config.hexagons.count; i++) {
-        gameState.objects.push({
-            bounceCount : 0,
-            radius: config.hexagons.size,
-            processedOnTick : gameState.lastTick,
-            angles : 6,
-            points : createCornerPoints(6, config.hexagons.size),
-            x : getCoordX(),
-            y : getCoordY(),
-            vx: getSpeed(),
-            vy: getSpeed()
-        })
+        obj = createObject("hexagon", 6, config.hexagons.size)
+        obj.draw = function(context) {
+            context.beginPath();
+            context.fillStyle = objectColors[this.bounceCount];
+            context.moveTo(this.x + this.points[0].x, this.y + this.points[0].y);
+        
+            this.points.forEach(({x, y}) => {
+                context.lineTo(this.x + x, this.y + y)
+            })
+            
+            context.fill()
+            context.closePath()
+        }
+
+        gameState.objects.push(obj)
     }
 
     // generate circles
     for (let i = 0; i < config.circles.count; i++) {
-        gameState.objects.push({
-            bounceCount : 0,
-            radius: config.circles.size,
-            processedOnTick : gameState.lastTick,
-            angles : 24,
-            points : createCornerPoints(24, config.circles.size),
-            x : getCoordX(),
-            y : getCoordY(),
-            vx: getSpeed(),
-            vy: getSpeed()
-        })
+        obj = createObject("circle", 16, config.circles.size)
+        obj.draw = function(context) {
+            context.beginPath();
+            context.fillStyle = objectColors[this.bounceCount];
+            context.arc(this.x, this.y, this.radius, 0, 2 * Math.PI)
+            context.fill()
+            context.closePath()
+
+            // context.textAlign = "center"
+            // context.fillStyle = "#000000";
+            // context.fillText(this.cell, this.x, this.y)
+        }
+
+        gameState.objects.push(obj)
     }
 
     gameState.frameTimes = []
-}
-
-// сreates a set of corner points for a shape
-function createCornerPoints(anglesCount, radius) {
-    const points = []
-    let angle = 0
-
-    while (angle <= 2 * Math.PI) {
-        const px = Math.sin(angle) * (-radius)
-        const py = Math.cos(angle) * (-radius)
-        
-        points.push({x : px, y : py})
-        
-        angle += (360 / anglesCount) * Math.PI / 180
-    }
-
-    return points
 }
 
 canvas.addEventListener('click', onClick, false)

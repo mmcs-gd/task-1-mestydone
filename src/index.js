@@ -85,10 +85,7 @@ function update(tick) {
             case direction.down : if (obj.vy < 0)  obj.vy *= -1; break
         }
 
-        if (dir !== direction.none) {
-            // столкновение со стеной
-            obj.bounceCount++;
-        } else {
+        if (dir === direction.none) {
             // столкновение с другим объектом
             objects
             //.filter(otherObj => obj.cell == otherObj.cell) // сетка

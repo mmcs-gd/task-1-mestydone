@@ -2,18 +2,18 @@ const canvas = document.getElementById("cnvs");
 
 const config = {
     triangels : {
-        count : 100,
-        size : 8
+        count : 150,
+        size : 5
     }, 
 
     circles : {
-        count : 100,
-        size : 8
+        count : 150,
+        size : 5
     }, 
 
     hexagons : {
-        count : 100,
-        size : 8
+        count : 150,
+        size : 5
     }, 
 }
 
@@ -56,18 +56,19 @@ function draw(tFrame) {
     drawObjects(context)
     drawRestartHint(context)
     drawInfo(context)
-    drawGrid(context)
+    //drawGrid(context)
 }
 
 function update(tick) {
     const objects = gameState.objects;
-    
-    objects.forEach(obj => {
-        row = Math.trunc(obj.y / (canvas.height / grid.height))
-        col = Math.trunc(obj.x / (canvas.width / grid.width))
 
-        obj.cell = grid.width * row + col
-    })
+    // сетка
+    // objects.forEach(obj => {
+    //     row = Math.trunc(obj.y / (canvas.height / grid.height))
+    //     col = Math.trunc(obj.x / (canvas.width / grid.width))
+
+    //     obj.cell = grid.width * row + col
+    // })
     
     objects.forEach(obj => {
         obj.x += obj.vx
@@ -90,7 +91,7 @@ function update(tick) {
         } else {
             // столкновение с другим объектом
             objects
-         //   .filter(otherObj => obj.cell == otherObj.cell)
+            //.filter(otherObj => obj.cell == otherObj.cell) // сетка
             .forEach(otherObj => {
                 if (otherObj === obj 
                     || otherObj.processedOnTick === tick) return
@@ -118,7 +119,7 @@ function update(tick) {
 }
 
 
-// return bounce direction for collision with wall
+// return bounce direction for co llision with wall
 function checkWallCollision(obj) {
     if (obj.x <= 0 + obj.radius) {
         if (obj.type === "circle") {
